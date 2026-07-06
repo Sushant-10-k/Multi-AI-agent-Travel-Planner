@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>TravelOrchestra</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+    <div class="page-bg">
+        <div class="gradient-circle circle-1"></div>
+        <div class="gradient-circle circle-2"></div>
+        <div class="gradient-circle circle-3"></div>
+    </div>
+
+    <header class="site-header">
+        <div class="nav-wrap">
+            <nav class="site-nav">
+                <a href="#" class="logo">
+                    <div class="logo-badge">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M2 16.5L22 8L14.5 22L12 15L2 16.5Z" fill="white"/>
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <span class="logo-title">TravelOrchestra</span>
+                        <span class="logo-subtitle">Multi-agent planner</span>
+                    </div>
+                </a>
+
+                <div class="route-nav">
+                    <div class="route-line"></div>
+                    <svg class="plane-glide" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2 16.5L22 8L14.5 22L12 15L2 16.5Z"/>
+                    </svg>
+                    <a href="#flights" class="route-stop">
+                        <span class="route-dot"></span>
+                        <span class="route-code">01 · dep</span>
+                        <span class="route-label">Flights</span>
+                    </a>
+                    <a href="#stays" class="route-stop">
+                        <span class="route-dot"></span>
+                        <span class="route-code">02 · stay</span>
+                        <span class="route-label">Hotels</span>
+                    </a>
+                    <a href="#itinerary" class="route-stop">
+                        <span class="route-dot"></span>
+                        <span class="route-code">03 · plan</span>
+                        <span class="route-label">Itinerary</span>
+                    </a>
+                    <a href="#agents" class="route-stop">
+                        <span class="route-dot"></span>
+                        <span class="route-code">04 · arr</span>
+                        <span class="route-label">Agents</span>
+                    </a>
+                </div>
+
+                <div class="nav-actions">
+                    <div class="status-pill">
+                        <span class="status-dot"></span>
+                        Online
+                    </div>
+                    <button class="nav-cta" onclick="document.getElementById('userInput').focus()">
+                        Launch planner
+                    </button>
+                </div>
+            </nav>
+        </div>
+        <div class="header-perf"></div>
+    </header>
+
+    <main class="app-container">
+
+        <section class="hero-section">
+            <div class="badge">
+                ✈️ TravelOrchestra — A Multi-AI Agent Travel Planner with LangGraph
+            </div>
+
+            <h1>
+                Plan Your Overall Trip with <span class="accent">AI</span>
+            </h1>
+
+            <p>
+                Search flights, discover hotels, and generate a complete travel itinerary using a multi-agent LangGraph system.
+            </p>
+        </section>
+
+        <section class="planner-card">
+
+            <div class="card-header">
+                <div>
+                    <h2>Where would you like to travel?</h2>
+                    <p>
+                        Example: Plan a complete 10 days Thailand trip from India under 30 Thousand.
+                    </p>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <textarea
+                    id="userInput"
+                    placeholder="Plan a complete 10 days Thailand trip from India under 30 Thousand..."
+                ></textarea>
+
+                <button id="sendBtn" onclick="sendMessage()">
+                    <span id="btnText">Generate Plan →</span>
+                    <span id="btnLoader" class="loader hidden"></span>
+                </button>
+            </div>
+
+            <div class="quick-prompts">
+                <button onclick="setPrompt('Plan a complete 10 days Japan trip from India including flights, hotels and sightseeing under 50 Thousand.')">
+                    🗾 Japan Trip
+                </button>
+
+                <button onclick="setPrompt('Plan a 5 days Dubai trip from India with flights, hotels and sightseeing.')">
+                    🏙️ Dubai Trip
+                </button>
+
+                <button onclick="setPrompt('Plan a 7 days Thailand trip from India with budget hotels and sightseeing.')">
+                    🌴 Thailand Trip
+                </button>
+
+                <button onclick="setPrompt('Give me all country flight info.')">
+                    ✈️ Global Flights
+                </button>
+            </div>
+
+        </section>
+
+        <div class="agent-strip">
+            <div class="agent-tag">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 16.5L22 8L14.5 22L12 15L2 16.5Z"/></svg>
+                <b>Flight agent</b>&nbsp;· fares &amp; routes
+            </div>
+            <div class="agent-tag">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="18" height="13" rx="1.5"/><path d="M3 11h18M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                <b>Stay agent</b>&nbsp;· hotels
+            </div>
+            <div class="agent-tag">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 19V5a1 1 0 011-1h9l6 6v9a1 1 0 01-1 1H5a1 1 0 01-1-1z"/><path d="M14 4v6h6"/></svg>
+                <b>Itinerary agent</b>&nbsp;· day plans
+            </div>
+            <div class="agent-tag">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+                <b>Budget agent</b>&nbsp;· cost control
+            </div>
+        </div>
+
+        <section id="resultSection" class="result-section hidden">
+
+            <div class="result-header">
+                <div>
+                    <h2>Your AI Travel Plan</h2>
+                    <p id="threadInfo">Thread ID: -</p>
+                </div>
+
+                <div class="result-actions">
+                    <button class="copy-btn" onclick="copyResult()">
+                        Copy
+                    </button>
+
+                    <button class="download-btn" onclick="downloadPDF()">
+                        Download PDF
+                    </button>
+                </div>
+            </div>
+
+            <div id="pdfContent" class="pdf-content">
+                <h1 class="pdf-title">AI Travel Plan</h1>
+                <div id="resultBox" class="result-box"></div>
+            </div>
+
+        </section>
+
+        <section id="errorBox" class="error-box hidden"></section>
+
+    </main>
+
+    <footer>
+        Built with FastAPI, LangGraph, Groq, PostgreSQL, Tavily and AviationStack
+    </footer>
+
+    <!-- Markdown Renderer -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- PDF Download Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <!-- Your Custom JS -->
+    <script src="/static/script.js"></script>
+
+</body>
+</html>
