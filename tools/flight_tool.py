@@ -4,6 +4,7 @@ import certifi
 import airportsdata
 import pycountry
 import requests
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,13 +12,26 @@ load_dotenv()
 os.environ["SSL_CERT_FILE"] = certifi.where()
 os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 
-API_KEY = os.getenv("AVIATIONSTACK_API_KEY","DEL")
+SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY", "").strip()
+AVIATIONSTACK_API_KEY = os.getenv("AVIATIONSTACK_API_KEY", "").strip()
 
 # Default origin IATA code for flight searches
 # change this to your preferred default origin airport code if needed
 DEFAULT_ORIGIN_IATA = os.getenv("DEFAULT_ORIGIN_IATA","DEL")
 
-BASE_URL = "http://api.aviationstack.com/v1/flights"
+SERPAPI_BASE_URL = "https://serpapi.com/search.json"
+USD_TO_INR_RATE = 95.41
+BUDGET_KEYWORDS = [
+    "budget",
+    "inr",
+    "rupee",
+    "rupees",
+    "₹",
+    "rs",
+    "rs.",
+    "rupee",
+    "rupees",
+]
 
 AIRPORTS = airportsdata.load("IATA")
 
@@ -408,76 +422,162 @@ def parse_route(query: str):
     return None, None
 
 
-def format_flight(flight: dict):
-    airline = flight.get("airline", {}).get("name") or "Unknown airline"
-    flight_number = flight.get("flight", {}).get("iata") or "Unknown flight number"
-    status = flight.get("flight_status") or "Unknown"
+def format_duration(minutes: int | None):
+    if not minutes or minutes <= 0:
+        return "Unknown"
+    hours = minutes // 60
+    mins = minutes % 60
+    if hours and mins:
+        return f"{hours}h {mins}m"
+    if hours:
+        return f"{hours}h"
+    return f"{mins}m"
 
-    dep = flight.get("departure", {}) or {}
-    arr = flight.get("arrival", {}) or {}
 
-    dep_airport = dep.get("airport") or "Unknown departure airport"
-    dep_iata = dep.get("iata") or "Unknown"
-    dep_terminal = dep.get("terminal") or "N/A"
-    dep_gate = dep.get("gate") or "N/A"
-    dep_scheduled = dep.get("scheduled") or "Unknown"
-    dep_delay = dep.get("delay")
-    dep_delay_text = f"{dep_delay} minutes" if dep_delay is not None else "N/A"
+def format_time_string(timestamp: str) -> str:
+    if not timestamp or not isinstance(timestamp, str):
+        return "Unknown"
 
-    arr_airport = arr.get("airport") or "Unknown arrival airport"
-    arr_iata = arr.get("iata") or "Unknown"
-    arr_terminal = arr.get("terminal") or "N/A"
-    arr_gate = arr.get("gate") or "N/A"
-    arr_scheduled = arr.get("scheduled") or "Unknown"
-    arr_delay = arr.get("delay")
-    arr_delay_text = f"{arr_delay} minutes" if arr_delay is not None else "N/A"
+    for fmt in [
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%H:%M",
+        "%I:%M %p",
+    ]:
+        try:
+            dt = datetime.strptime(timestamp, fmt)
+            return dt.strftime("%Y-%m-%d %I:%M %p").replace(" 0", " ")
+        except ValueError:
+            continue
 
-    return f"""
-Airline: {airline}
-Flight: {flight_number}
-Status: {status}
+    return timestamp
 
-Departure:
-- Airport: {dep_airport}
-- IATA: {dep_iata}
-- Terminal: {dep_terminal}
-- Gate: {dep_gate}
-- Scheduled: {dep_scheduled}
-- Delay: {dep_delay_text}
 
-Arrival:
-- Airport: {arr_airport}
-- IATA: {arr_iata}
-- Terminal: {arr_terminal}
-- Gate: {arr_gate}
-- Scheduled: {arr_scheduled}
-- Delay: {arr_delay_text}
-""".strip()
+def format_price_value(price_value, show_inr: bool) -> str:
+    if price_value is None:
+        return "Price: unavailable"
+
+    cleaned = re.sub(r"[^\d.]", "", str(price_value))
+
+    try:
+        amount = float(cleaned)
+    except (TypeError, ValueError):
+        return f"Price: {price_value}"
+
+    if show_inr:
+        inr_value = int(round(amount * USD_TO_INR_RATE))
+        return f"Price: ₹{inr_value}"
+
+    return f"Price: ${amount:g}"
+
+
+def format_serpapi_flight(flight: dict, show_inr: bool = True):
+    price = flight.get("price")
+    if isinstance(price, dict):
+        price_value = price.get("amount") or price.get("raw") or price.get("value")
+    else:
+        price_value = price
+
+    price_text = format_price_value(price_value, show_inr)
+
+    segments = flight.get("flights") or []
+    airline = flight.get("airline") or "Unknown airline"
+    flight_number = "Unknown flight number"
+    travel_class = flight.get("travel_class") or "Unknown class"
+    route = "Unknown route"
+    departure_time = "Unknown"
+    arrival_time = "Unknown"
+    duration_text = format_duration(flight.get("total_duration"))
+    stops = "Direct"
+    segment_lines = []
+
+    if segments:
+        if len(segments) > 1:
+            stops = f"{len(segments) - 1} stop(s)"
+
+        details = []
+        for segment in segments:
+            dep = segment.get("departure_airport") or {}
+            arr = segment.get("arrival_airport") or {}
+            seg_route = f"{dep.get('id') or dep.get('name', 'Unknown')} → {arr.get('id') or arr.get('name', 'Unknown')}"
+            seg_dep_time = format_time_string(dep.get("time") or "Unknown")
+            seg_arr_time = format_time_string(arr.get("time") or "Unknown")
+            details.append(f"    • {seg_route} | {seg_dep_time} → {seg_arr_time}")
+
+        segment_lines = details
+        first_segment = segments[0]
+        departure_airport = first_segment.get("departure_airport") or {}
+        arrival_airport = segments[-1].get("arrival_airport") or {}
+        departure_time = format_time_string(departure_airport.get("time") or "Unknown")
+        arrival_time = format_time_string(arrival_airport.get("time") or "Unknown")
+        route = f"{departure_airport.get('name', 'Unknown')} → {arrival_airport.get('name', 'Unknown')}"
+        airline = first_segment.get("airline") or airline
+        flight_number = first_segment.get("flight_number") or flight_number
+        travel_class = first_segment.get("travel_class") or travel_class
+        duration_text = format_duration(flight.get("total_duration") or first_segment.get("duration"))
+    else:
+        if flight.get("departure_airport") and flight.get("arrival_airport"):
+            dep = flight.get("departure_airport")
+            arr = flight.get("arrival_airport")
+            route = f"{dep.get('name', dep)} → {arr.get('name', arr)}"
+            departure_time = format_time_string(dep.get("time") or "Unknown")
+            arrival_time = format_time_string(arr.get("time") or "Unknown")
+
+    lines = [
+        f"- Airline: {airline}",
+        f"  o Flight Number: {flight_number}",
+        f"  o Class: {travel_class}",
+        f"  o Route: {route}",
+        f"  o Departure: {departure_time}",
+        f"  o Arrival: {arrival_time}",
+        f"  o Duration: {duration_text}",
+        f"  o Stops: {stops}",
+        f"  o {price_text}",
+    ]
+
+    if segment_lines:
+        lines.append("  o Segments:")
+        for segment_line in segment_lines:
+            lines.append(f"    {segment_line.strip()}")
+
+    return "\n".join(lines)
 
 
 def search_flights(query: str, limit: int = 10):
-    if not API_KEY:
+    if not SERPAPI_API_KEY:
         return (
-            "Flight API error: AVIATIONSTACK_API_KEY is missing.\n"
+            "Flight API error: SERPAPI_API_KEY is missing.\n"
             "Please add this in your .env file:\n"
-            "AVIATIONSTACK_API_KEY=your_api_key_here"
+            "SERPAPI_API_KEY=your_serpapi_key_here"
         )
 
     dep_iata, arr_iata = parse_route(query)
 
     params = {
-        "access_key": API_KEY,
-        "limit": min(limit, 100),
+        "api_key": SERPAPI_API_KEY,
+        "engine": "google_flights",
+        "hl": "en",
+        "gl": "us",
+        "currency": "USD",
+        "type": "1",
+        "outbound_date": "2026-07-15",
+        "return_date": "2026-07-22",
     }
 
     if dep_iata:
-        params["dep_iata"] = dep_iata
+        params["departure_id"] = dep_iata
 
     if arr_iata:
-        params["arr_iata"] = arr_iata
+        params["arrival_id"] = arr_iata
+
+    if not dep_iata and not arr_iata:
+        params["q"] = query
 
     try:
-        response = requests.get(BASE_URL, params=params, timeout=30)
+        response = requests.get(SERPAPI_BASE_URL, params=params, timeout=30)
+        response.raise_for_status()
         data = response.json()
     except requests.exceptions.RequestException as e:
         return f"Flight API request failed: {e}"
@@ -485,14 +585,10 @@ def search_flights(query: str, limit: int = 10):
         return "Flight API returned invalid JSON."
 
     if "error" in data:
-        error = data["error"]
-        return (
-            "Flight API error:\n"
-            f"Code: {error.get('code', 'Unknown')}\n"
-            f"Message: {error.get('message', 'Unknown error')}"
-        )
+        error = data.get("error", "Unknown error")
+        return f"SerpAPI error: {error}"
 
-    flight_data = data.get("data", [])
+    flight_data = data.get("best_flights") or data.get("other_flights") or []
 
     if not flight_data:
         route_text = ""
@@ -505,26 +601,25 @@ def search_flights(query: str, limit: int = 10):
             route_text = f" to {arr_iata}"
 
         return (
-            f"No live flight data found{route_text}.\n\n"
-            "Note: AviationStack provides live/status flight data, not ticket prices. "
-            "For actual fare prices, use a flight-pricing API such as Amadeus."
+            f"No SerpAPI flight data found{route_text}.\n\n"
+            "Try a more specific route like 'Flights from Delhi to Tokyo'."
         )
 
-    route_info = "Global live flights"
+    route_info = "Flight Information\nThe following flights are available"
 
     if dep_iata and arr_iata:
-        route_info = f"Live flights from {dep_iata} to {arr_iata}"
+        route_info = f"Flight Information\nThe following flights are available from {dep_iata} to {arr_iata}:"
     elif dep_iata:
-        route_info = f"Live flights from {dep_iata}"
+        route_info = f"Flight Information\nThe following flights are available from {dep_iata}:"
     elif arr_iata:
-        route_info = f"Live flights to {arr_iata}"
+        route_info = f"Flight Information\nThe following flights are available to {arr_iata}:"
 
-    formatted_flights = [format_flight(flight) for flight in flight_data[:limit]]
+    formatted_flights = [format_serpapi_flight(flight, True) for flight in flight_data[:limit]]
 
     return f"{route_info}\n\n" + "\n\n---\n\n".join(formatted_flights)
 
 
 if __name__ == "__main__":
-    print(search_flights("Plan a 7 days Japan trip from Bangladesh"))
+    print(search_flights("Plan a 7 days Japan trip from India"))
     print("\n" + "=" * 80 + "\n")
     print(search_flights("all country flight info"))

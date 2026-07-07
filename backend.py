@@ -128,7 +128,10 @@ Flight Results:
 Hotel Results:
 {state['hotel_results']}
 
-Make the itinerary practical, budget-aware, and easy to follow.
+Instructions:
+- Use INR for every price value in the itinerary and recommendations.
+- Show all departure and arrival times in 12-hour format with AM or PM.
+- Keep the itinerary practical, budget-aware, and easy to follow.
 """
 
     response = llm.invoke([
@@ -150,34 +153,40 @@ Make the itinerary practical, budget-aware, and easy to follow.
 # # =========================
 
 def final_agent(state: TravelState):
+    flight_section = state.get("flight_results", "") or "No flight data available."
+    hotel_section = state.get("hotel_results", "") or "No hotel data available."
+    itinerary_section = state.get("itinerary", "") or "No itinerary generated yet."
+
     final_prompt = f"""
-Generate the final travel response for the user.
+You are producing the final travel response for the user.
 
 User Request:
 {state['user_query']}
 
-Flights:
-{state['flight_results']}
+Flight Search Results (use this as the primary source for flight information):
+{flight_section}
 
-Hotels:
-{state['hotel_results']}
+Hotel Search Results:
+{hotel_section}
 
-Itinerary:
-{state['itinerary']}
+Itinerary Draft:
+{itinerary_section}
 
-Format the final answer beautifully using these sections:
-
+Instructions:
+- Present the flight information clearly and directly.
+- Include a dedicated "Flight Information" section, and insert the raw flight search output exactly as shown above.
+- Use INR for every price value in the final answer. Do not display prices in USD unless you also show the rupee equivalent.
+- Display all departure and arrival times in 12-hour format with AM or PM.
+- If the flight search results contain airline, route, price, or timing details, include them verbatim or closely paraphrase them without inventing new data.
+- Do not replace the flight information with generic placeholder text like 'several options' unless no flight data is available.
+- Preserve any bullet-point structure from the flight results.
+- Keep the response structured with these sections:
 1. Trip Summary
 2. Flight Information
 3. Hotel Suggestions
 4. Day-by-Day Itinerary
 5. Estimated Budget
 6. Final Recommendations
-
-Important:
-- Be clear and practical.
-- Mention that live flight API may not provide ticket prices if pricing is unavailable.
-- Keep the response useful for real travel planning.
 """
 
     response = llm.invoke([
